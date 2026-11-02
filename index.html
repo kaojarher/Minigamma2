@@ -498,7 +498,10 @@ let decks=store.get('deckai.decks',[]);
 let deck=null, genCtl=null, outCtl=null, screen='home';
 const cfgOf=p=>({...PROVIDERS[p].defaults,...(settings.cfg[p]||{})});
 const slideById=id=>deck?.slides.find(s=>s.id===id);
-for(const d of decks){d.slides=d.slides||[];for(const s of d.slides){if(s.status==='loading'){s.status='error';s.error='生成中斷(頁面重新整理)'}}}
+for(const d of decks){d.slides=d.slides||[];d.slides.forEach((s,i)=>{
+  if(s.status==='loading'){s.status='error';s.error='生成中斷(頁面重新整理)'}
+  else if(JSON.stringify(s).includes('[object Object]')){s.title=str(d.outline?.[i]?.title,90)||'';s.status='error';s.error='此頁內容異常(舊版錯誤),請按「重試此頁」重新生成'}
+})}
 let saveT=0;
 function saveDecks(){const ok=store.set('deckai.decks',decks);if(!ok)toast('儲存失敗:瀏覽器儲存空間已滿(可先匯出專案檔、刪除舊簡報或少用上傳圖片)','err')}
 function touch(){if(!deck)return;deck.updated=Date.now();clearTimeout(saveT);saveT=setTimeout(saveDecks,500)}
@@ -529,7 +532,18 @@ function extractJSON(text){
 }
 
 /* ================= Slide normalisation & layout conversion ================= */
-const str=(v,max=200)=>String(v??'').replace(/\*\*|__|`/g,'').replace(/^#+\s*/,'').replace(/\s+/g,' ').trim().slice(0,max);
+function txtOf(v,d=0){
+  if(v==null||d>4)return '';
+  if(typeof v==='string')return v;
+  if(typeof v==='number'||typeof v==='boolean')return String(v);
+  if(Array.isArray(v))return v.map(x=>txtOf(x,d+1)).filter(Boolean).join('、');
+  if(typeof v==='object'){
+    for(const k of ['text','content','value','title','heading','label','name','zh-TW','zh_TW','zh','cn','en','description','desc']){if(v[k]!=null){const t=txtOf(v[k],d+1);if(t)return t}}
+    for(const x of Object.values(v)){const t=txtOf(x,d+1);if(t)return t}
+  }
+  return '';
+}
+const str=(v,max=200)=>txtOf(v).replace(/\*\*|__|`/g,'').replace(/^#+\s*/,'').replace(/\s+/g,' ').trim().slice(0,max);
 const arrS=(v,max,n)=>(Array.isArray(v)?v:[]).map(x=>typeof x==='string'?x:(x&&(x.text||x.point||x.title||x.heading))||'').map(x=>str(x,max)).filter(Boolean).slice(0,n);
 function toBullets(s){
   if(s.bullets?.length)return s.bullets;
@@ -557,7 +571,9 @@ function ensureFields(s,L){
 }
 function convertLayout(s,L){s.layout=L;ensureFields(s,L);if(L==='split'&&!s.image)s.image=null}
 function normalizeSlide(o,want,imgsOn,fallbackTitle){
+  if(Array.isArray(o))o=o[0];
   o=o&&typeof o==='object'?o:{};
+  for(let k=0;k<2&&!o.layout&&!o.title&&!o.bullets&&!o.items;k++){const inner=['slide','page','data','result','content','output'].map(x=>o[x]).find(x=>x&&typeof x==='object'&&!Array.isArray(x));if(inner)o=inner;else break}
   let L=LAYOUTS[o.layout]?o.layout:(want||'bullets');
   const s={layout:L,title:str(o.title,90)||fallbackTitle||'',subtitle:str(o.subtitle,140),notes:str(o.notes,700)};
   s.bullets=arrS(o.bullets,90,8);
