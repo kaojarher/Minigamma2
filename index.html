@@ -350,7 +350,7 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
 
   <section class="screen" id="editor" hidden>
     <aside id="thumbs"></aside>
-    <div id="canvas"><div id="genbar" hidden><span id="genTxt"></span><div class="bar"><i id="genFill"></i></div><button class="btn sm danger" id="genStop">停止</button></div><div class="col" id="cards"></div></div>
+    <div id="canvas"><div id="genbar" hidden><span id="genTxt"></span><div class="bar"><i id="genFill"></i></div><button class="btn sm danger" id="genStop">停止</button><button class="btn sm pri" id="genRetry" hidden>↻ 重試失敗的頁面</button></div><div class="col" id="cards"></div></div>
   </section>
 </main>
 
@@ -369,7 +369,7 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
     <label class="fld" id="fKey">API Key<input type="password" id="apiKey" autocomplete="off" placeholder="sk-..."></label>
     <div class="row"><label class="fld">模型<input type="text" id="model" list="modelList" autocomplete="off"></label><button type="button" class="btn" id="fetchModels">取得清單</button></div>
     <datalist id="modelList"></datalist><div id="testMsg" style="font-size:13px"></div>
-    <div class="row"><label class="fld">同時生成頁數(1–4)<input type="number" id="conc" min="1" max="4"></label><label class="fld">Temperature(留空=預設)<input type="number" id="temp" min="0" max="2" step="0.1"></label></div>
+    <div class="row"><label class="fld">同時生成頁數(1–4,預設 1 最穩定)<input type="number" id="conc" min="1" max="4"></label><label class="fld">Temperature(留空=預設)<input type="number" id="temp" min="0" max="2" step="0.1"></label></div>
     <label class="fld">額外指示(附加到每次生成,可留空)<textarea class="f" id="system" rows="2" placeholder="例如:品牌名稱為「星河科技」,避免使用過度行銷的詞彙。"></textarea></label>
     <div class="note">每一頁會各呼叫一次模型(大綱另計),建議使用能穩定輸出 JSON 的模型。設定與簡報只存在這個瀏覽器的 localStorage。</div>
   </div>
@@ -468,7 +468,13 @@ const PROVIDERS={
 async function* streamPuter(cfg,messages,signal){
   if(typeof puter==='undefined') throw new Error('無法載入 puter.js(請確認網路連線,或改用其他供應商)。');
   const resp=await puter.ai.chat(messages,{model:cfg.model,stream:true});
-  for await(const part of resp){if(signal.aborted)return;const t=part?.text??part?.message?.content?.[0]?.text??'';if(t)yield t}
+  if(resp&&typeof resp[Symbol.asyncIterator]==='function'){
+    for await(const part of resp){if(signal.aborted)return;const t=part?.text??part?.message?.content?.[0]?.text??'';if(t)yield t}
+  }else{
+    const c=resp?.message?.content;
+    const t=typeof c==='string'?c:Array.isArray(c)?c.map(x=>x?.text||'').join(''):(resp?.text||(typeof resp==='string'?resp:''));
+    if(t)yield t;
+  }
 }
 async function* lines(res){const r=res.body.getReader(),d=new TextDecoder();let b='';while(true){const{done,value}=await r.read();if(done)break;b+=d.decode(value,{stream:true});const p=b.split('\n');b=p.pop();for(const x of p)yield x}if(b)yield b}
 async function httpError(res){let b='';try{b=await res.text()}catch{}try{const j=JSON.parse(b);b=j.error?.message||j.error||b}catch{}return new Error(`HTTP ${res.status}:${String(b).slice(0,400)}`)}
@@ -492,7 +498,8 @@ async function* streamOllama(cfg,messages,signal){
 const STREAMERS={puter:streamPuter,openai:streamOpenAI,ollama:streamOllama,custom:streamOpenAI};
 
 /* ================= State ================= */
-let settings={provider:'puter',cfg:{},system:'',temp:'',conc:2,...store.get('deckai.settings',{})};
+let settings={provider:'puter',cfg:{},system:'',temp:'',conc:1,...store.get('deckai.settings',{})};
+if(settings.concV!==1){settings.conc=1;settings.concV=1;store.set('deckai.settings',settings)}
 let prefs={mode:'topic',pages:'10',lang:'zh-TW',tone:'professional',imgs:'commons',theme:'clean',...store.get('deckai.prefs',{})};
 let decks=store.get('deckai.decks',[]);
 let deck=null, genCtl=null, outCtl=null, screen='home';
@@ -506,16 +513,34 @@ let saveT=0;
 function saveDecks(){const ok=store.set('deckai.decks',decks);if(!ok)toast('儲存失敗:瀏覽器儲存空間已滿(可先匯出專案檔、刪除舊簡報或少用上傳圖片)','err')}
 function touch(){if(!deck)return;deck.updated=Date.now();clearTimeout(saveT);saveT=setTimeout(saveDecks,500)}
 
+function errMsg(e){
+  if(e==null)return '未知錯誤';
+  if(typeof e==='string')return e;
+  const m=e.error?.message||e.message||(typeof e.error==='string'?e.error:'')||e.msg||e.reason;
+  if(m&&typeof m==='string'){const c=e.error?.code||e.code;return c&&!String(m).includes(c)?`${m}(${c})`:m}
+  try{return JSON.stringify(e).slice(0,300)}catch{return String(e)}
+}
+function classify(er){
+  const m=`${er.message||''} ${er.code||''}`;
+  er.fatal=/insufficient|quota|billing|credit|balance|unauthori|forbidden|auth.?failed|api.?key|not.*logged|permission|usage.?limit|\b(401|402|403)\b/i.test(m);
+  return er;
+}
 async function callLLM(messages,signal,onTok){
   const cfg=cfgOf(settings.provider);
   if(!cfg.model)throw new Error('尚未設定模型名稱,請到右上角 🧠 設定。');
   let t='';
-  for await(const tok of STREAMERS[settings.provider](cfg,messages,signal||new AbortController().signal)){
-    if(signal?.aborted)break; t+=tok; onTok&&onTok(t);
+  try{
+    for await(const tok of STREAMERS[settings.provider](cfg,messages,signal||new AbortController().signal)){
+      if(signal?.aborted)break; t+=tok; onTok&&onTok(t);
+    }
+  }catch(e){
+    if(signal?.aborted||e?.name==='AbortError')throw new DOMException('Aborted','AbortError');
+    const er=new Error(errMsg(e));er.code=e?.error?.code||e?.code;throw classify(er);
   }
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   return t.replace(/<think>[\s\S]*?<\/think>/g,'');
 }
+const wait=(ms,signal)=>new Promise((res,rej)=>{const t=setTimeout(res,ms);signal?.addEventListener('abort',()=>{clearTimeout(t);rej(new DOMException('Aborted','AbortError'))},{once:true})});
 function extractJSON(text){
   let s=String(text||''); const m=s.match(/```(?:json)?\s*([\s\S]*?)```/); if(m&&m[1].includes('{'))s=m[1];
   const i=s.indexOf('{'); if(i<0)return null;
@@ -527,6 +552,17 @@ function extractJSON(text){
       const raw=s.slice(i,j+1);
       try{return JSON.parse(raw)}catch{try{return JSON.parse(raw.replace(/,\s*([}\]])/g,'$1'))}catch{return null}}
     }}
+  }
+  return repairJSON(s.slice(i));
+}
+function repairJSON(raw){
+  for(let cut=0;cut<8;cut++){
+    const stack=[];let inStr=false,e2=false;
+    for(const c of raw){if(inStr){if(e2)e2=false;else if(c==='\\')e2=true;else if(c==='"')inStr=false;continue}if(c==='"')inStr=true;else if(c==='{'||c==='[')stack.push(c);else if(c==='}'||c===']')stack.pop()}
+    let t=raw;if(inStr)t+='"';
+    t=t.replace(/[,:\s]+$/,'')+stack.reverse().map(c=>c==='{'?'}':']').join('');
+    try{return JSON.parse(t.replace(/,\s*([}\]])/g,'$1'))}catch{}
+    const k=raw.lastIndexOf(',');if(k<=0)return null;raw=raw.slice(0,k);
   }
   return null;
 }
@@ -570,20 +606,34 @@ function ensureFields(s,L){
   return s;
 }
 function convertLayout(s,L){s.layout=L;ensureFields(s,L);if(L==='split'&&!s.image)s.image=null}
+const toList=(v,max,n)=>{
+  const a=Array.isArray(v)?v:typeof v==='string'?v.split(/\n+|[；;]\s*/):(v&&typeof v==='object')?Object.values(v):[];
+  return a.map(x=>typeof x==='string'?x:(x&&(x.text||x.point||x.title||x.heading||x.content))||x).map(x=>str(x,max).replace(/^(?:[-•*·]\s*|\d+[.、)]\s*)/,'')).filter(Boolean).slice(0,n);
+};
+const realContent=(s,L)=>{switch(L){
+  case 'title':case 'closing':case 'section':return !!s.title;
+  case 'bullets':case 'split':return s.bullets.length>0;
+  case 'cards':case 'timeline':return s.items.length>=2;
+  case 'stats':return s.stats.length>0;
+  case 'quote':return !!s.quote;
+  case 'compare':return !!(s.left?.points?.length&&s.right?.points?.length);
+  case 'chart':return !!s.chart;
+  default:return true}};
 function normalizeSlide(o,want,imgsOn,fallbackTitle){
   if(Array.isArray(o))o=o[0];
   o=o&&typeof o==='object'?o:{};
   for(let k=0;k<2&&!o.layout&&!o.title&&!o.bullets&&!o.items;k++){const inner=['slide','page','data','result','content','output'].map(x=>o[x]).find(x=>x&&typeof x==='object'&&!Array.isArray(x));if(inner)o=inner;else break}
   let L=LAYOUTS[o.layout]?o.layout:(want||'bullets');
-  const s={layout:L,title:str(o.title,90)||fallbackTitle||'',subtitle:str(o.subtitle,140),notes:str(o.notes,700)};
-  s.bullets=arrS(o.bullets,90,8);
-  s.items=(Array.isArray(o.items)?o.items:[]).slice(0,6).map(x=>{
+  const pick=(...ks)=>{for(const k of ks)if(o[k]!=null&&txtOf(o[k])!=='')return o[k];return undefined};
+  const s={layout:L,title:str(pick('title','heading','headline','name'),90)||fallbackTitle||'',subtitle:str(pick('subtitle','sub','tagline'),140),notes:str(pick('notes','speaker_notes','speakerNotes','note'),700)};
+  s.bullets=toList(pick('bullets','points','key_points','keyPoints','list','body','content','text'),90,8);
+  s.items=(()=>{const src=pick('items','cards','steps','stages','events','timeline');return(Array.isArray(src)?src:[]).slice(0,6).map(x=>{
     if(typeof x==='string'){const m=x.split(/[：:]/);return{icon:'lightbulb',heading:str(m[0],14),text:str(m.slice(1).join('：')||x,80)}}
-    return{icon:ICONS.includes(x?.icon)?x.icon:'lightbulb',heading:str(x?.heading||x?.title||x?.label,16),text:str(x?.text||x?.desc||x?.description,90)}
-  }).filter(x=>x.heading||x.text);
-  s.stats=(Array.isArray(o.stats)?o.stats:[]).slice(0,4).map(x=>({value:str(x?.value,14),label:str(x?.label||x?.text,50)})).filter(x=>x.value);
-  s.quote=str(o.quote,220);s.author=str(o.author,60);
-  const side=x=>x&&typeof x==='object'?{heading:str(x.heading||x.title,24),points:arrS(x.points||x.bullets,70,5)}:null;
+    return{icon:ICONS.includes(x?.icon)?x.icon:'lightbulb',heading:str(x?.heading||x?.title||x?.label||x?.name||x?.step,16),text:str(x?.text||x?.desc||x?.description||x?.content,90)}
+  }).filter(x=>x.heading||x.text)})();
+  s.stats=(()=>{const src=pick('stats','numbers','metrics','kpis');return(Array.isArray(src)?src:[]).slice(0,4).map(x=>({value:str(x?.value??x?.number,14),label:str(x?.label||x?.text||x?.description,50)})).filter(x=>x.value)})();
+  s.quote=str(pick('quote')??(L==='quote'?pick('text','content'):undefined),220);s.author=str(pick('author','source_name','by'),60);
+  const side=x=>x&&typeof x==='object'?{heading:str(x.heading||x.title,24),points:toList(x.points||x.bullets||x.items,70,5)}:null;
   s.left=side(o.left);s.right=side(o.right);
   const c=o.chart;
   if(c&&Array.isArray(c.labels)&&Array.isArray(c.datasets)&&c.labels.length>=2){
@@ -594,11 +644,11 @@ function normalizeSlide(o,want,imgsOn,fallbackTitle){
   s.source=str(o.source,80);
   const q=str(o.image_query||o.imageQuery||o.image?.query,80);
   if(imgsOn&&q&&['title','bullets','split','closing'].includes(L))s.image={query:q};
-  // fallbacks when data for the layout is missing
-  const has={cards:s.items.length>=2,timeline:s.items.length>=2,stats:s.stats.length>=1,quote:!!s.quote,compare:s.left&&s.right&&s.left.points.length&&s.right.points.length,chart:!!s.chart};
-  if(L in has&&!has[L]){const b=toBullets(s);L=b.length?'bullets':'bullets';s.layout=L}
+  const has={cards:s.items.length>=2,timeline:s.items.length>=2,stats:s.stats.length>=1,quote:!!s.quote,compare:!!(s.left&&s.right&&s.left.points.length&&s.right.points.length),chart:!!s.chart};
+  if(L in has&&!has[L]){const b=toBullets(s);if(!b.length&&s.bullets.length===0)s.bullets=[];s.layout=L='bullets'}
   if(L==='split'&&!imgsOn)s.layout=L='bullets';
   if(L==='split'&&!s.image&&imgsOn)s.image={query:s.title};
+  s._empty=!realContent({...s,bullets:s.bullets.length?s.bullets:toBullets(s)},s.layout);
   ensureFields(s,s.layout);
   return s;
 }
@@ -879,53 +929,86 @@ function slideUser(s,i,instr){
   if(deck.mode==='paste'&&deck.source)u+=`\n\n原始資料(內容必須忠於此資料):\n"""\n${deck.source.slice(0,12000)}\n"""`;
   return u;
 }
+const SCHEMA_LINES=Object.fromEntries(SLIDE_SCHEMA.split('\n').slice(1).map(l=>[l.split(':')[0].trim(),l]));
+let backoffUntil=0,rateLimited=false;
+const RB=()=>window.__retryBase??1500;
 async function genSlide(s,signal,instr){
-  const i=deck.slides.indexOf(s),oldTitle=s.title;let o=null,text='';
-  for(let k=0;k<2&&!o;k++){
-    text=await callLLM([{role:'system',content:slideSystem(deck)},{role:'user',content:slideUser(s,i,instr)+(k?'\n\n(上次輸出無法解析,請只輸出一個合法的 JSON 物件)':'')}],signal);
-    o=extractJSON(text);
+  const i=deck.slides.indexOf(s),oldTitle=s.title,keep={id:s.id,brief:s.brief,flip:s.flip},layout=s.layout;
+  const userBase=slideUser(s,i,instr)+'\n\n注意:所有欄位都必須有實際內容,不可是空字串或空陣列。';
+  let n=null,best=null,lastText='',lastWhy='',lastErr=null;
+  for(let a=0;a<3&&!n;a++){
+    const w=backoffUntil-Date.now();if(w>0)await wait(w,signal);
+    try{
+      const extra=a?`\n\n(上一次輸出不合格:${lastWhy}。請只輸出一個合法的 JSON 物件,格式範例:\n${SCHEMA_LINES[layout]||''})`:'';
+      lastText=await callLLM([{role:'system',content:slideSystem(deck)},{role:'user',content:userBase+extra}],signal);
+      const o=extractJSON(lastText);
+      if(!o){lastWhy=lastText.trim()?'輸出無法解析為 JSON':'模型沒有回傳內容';lastErr=null;continue}
+      const cand=normalizeSlide(o,layout,deck.imgs!=='none',oldTitle);
+      if(cand._empty){lastWhy='內容欄位是空的';lastErr=null;continue}
+      if(!instr&&cand.layout!==layout&&a<2){best=cand;lastWhy='資料不完整(缺少此版面需要的欄位)';lastErr=null;continue}
+      n=cand;
+    }catch(e){
+      if(signal?.aborted||e?.name==='AbortError')throw e;
+      if(e.fatal)throw e;
+      lastErr=e;lastWhy=e.message;
+      rateLimited=true;backoffUntil=Math.max(backoffUntil,Date.now()+RB()*2*(a+1));
+      if(a===2)throw e;
+    }
   }
-  const keep={id:s.id,brief:s.brief,flip:s.flip};
-  if(!o){ // fallback: show model text as bullets
-    const lines=text.split('\n').map(x=>x.replace(/^[\s\-*•\d.、)]+/,'').trim()).filter(Boolean).slice(0,5);
-    for(const k of Object.keys(s))delete s[k];
-    Object.assign(s,keep,{layout:'bullets',title:oldTitle||'',status:'ready',bullets:lines.length?lines:[s.brief||'(生成失敗,請按「AI 改寫」重試)'],notes:''});
-    return;
+  if(!n&&best)n=best;
+  if(!n){
+    const lines=lastText.includes('{')?[]:lastText.split('\n').map(x=>x.replace(/^[\s\-*•\d.、)]+/,'').trim()).filter(Boolean).slice(0,6);
+    if(lines.length>=2)n={layout:'bullets',title:oldTitle||'',subtitle:'',notes:'',bullets:lines};
+    else throw new Error(`模型沒有產出可用內容(${lastWhy||'未知原因'})。\n輸出節錄:${clip(lastText.replace(/\s+/g,' '),160)||'(空白)'}`);
   }
-  const title=s.title;
-  const n=normalizeSlide(o,s.layout,deck.imgs!=='none',title);
+  delete n._empty;
   for(const k of Object.keys(s))delete s[k];
   Object.assign(s,keep,n,{status:'ready'});
   await attachImage(s,signal);
 }
 function genUI(){
   const total=deck.slides.length,done=deck.slides.filter(x=>x.status!=='loading').length;
-  const bar=$('#genbar'),active=deck.slides.some(x=>x.status==='loading')&&genCtl;
-  bar.hidden=!active;if(!active)return;
-  $('#genTxt').textContent=`AI 正在生成 ${done}/${total}`;$('#genFill').style.width=(done/total*100)+'%';
+  const bad=deck.slides.filter(x=>x.status==='error').length,active=!!genCtl&&deck.slides.some(x=>x.status==='loading');
+  const bar=$('#genbar');bar.hidden=!(active||bad);
+  $('#genStop').hidden=!active;$('#genbar .bar').hidden=!active;$('#genRetry').hidden=active||!bad;
+  $('#genTxt').textContent=active?`AI 正在生成 ${done}/${total}${bad?`(${bad} 頁失敗)`:''}`:`有 ${bad} 頁生成失敗,可逐頁「重試」或一次重試全部`;
+  $('#genFill').style.width=(done/total*100)+'%';
 }
 async function runGeneration(){
   genCtl?.abort();genCtl=new AbortController();const ctl=genCtl;
-  const queue=deck.slides.filter(s=>s.status==='loading');
-  const worker=async()=>{
+  const queue=deck.slides.filter(s=>s.status==='loading');let fatalMsg='';
+  backoffUntil=0;rateLimited=false;
+  const conc=()=>rateLimited?1:Math.min(4,Math.max(1,+settings.conc||1));
+  const worker=async w=>{
     while(queue.length&&!ctl.signal.aborted){
+      if(w>=conc())return;
       const s=queue.shift();
       try{await genSlide(s,ctl.signal)}catch(e){
         if(ctl.signal.aborted)break;
-        s.status='error';s.error=(e.message||String(e))+(/Failed to fetch|NetworkError/i.test(e.message||'')?'\n(服務未啟動、位址錯誤,或未允許 CORS)':'');
+        s.status='error';s.error=errMsg(e)+(/Failed to fetch|NetworkError/i.test(errMsg(e))?'\n(服務未啟動、位址錯誤,或未允許 CORS)':'');
+        if(e.fatal){fatalMsg=s.error;ctl.abort()}
       }
-      if(ctl.signal.aborted)break;
+      if(ctl.signal.aborted&&!fatalMsg)break;
       if(deck.slides[0]===s&&s.status==='ready'&&s.layout==='title'&&!deck.title)deck.title=s.title;
       refreshCard(s.id);genUI();touch();
+      if(fatalMsg)break;
     }
   };
   genUI();
-  await Promise.all(Array.from({length:Math.min(4,Math.max(1,+settings.conc||2))},worker));
-  if(ctl.signal.aborted){for(const s of deck.slides)if(s.status==='loading'){s.status='error';s.error='已停止生成'}}
+  await Promise.all(Array.from({length:4},(_,w)=>worker(w)));
+  const stopped=ctl.signal.aborted;
+  if(stopped){for(const s of deck.slides)if(s.status==='loading'){s.status='error';s.error=fatalMsg?'已因額度/授權問題停止:'+fatalMsg:'已停止生成'}}
   genCtl=null;genUI();renderEditor();saveDecks();
   const bad=deck.slides.filter(s=>s.status==='error').length;
-  toast(ctl.signal.aborted?'已停止':bad?`完成,但有 ${bad} 頁失敗,可在該頁按「重試」`:'簡報生成完成 ✦',bad?'err':'');
+  if(fatalMsg)toast('已停止生成:'+fatalMsg+'(額度或授權問題,可稍後按「重試失敗的頁面」)','err');
+  else if(stopped)toast('已停止');
+  else toast(bad?`完成,但有 ${bad} 頁失敗,可按上方「重試失敗的頁面」`:'簡報生成完成 ✦',bad?'err':'');
 }
+$('#genRetry').addEventListener('click',()=>{
+  if(genCtl)return;
+  for(const s of deck.slides)if(s.status==='error'){s.status='loading';s.error=''}
+  renderEditor();runGeneration();
+});
 function startGenerate(){
   deck.slides=deck.outline.map(o=>({id:uid(),layout:o.layout,title:o.title,brief:o.brief,status:'loading'}));
   if(!decks.includes(deck))decks.unshift(deck);
@@ -1312,7 +1395,7 @@ $('#settingsForm').addEventListener('submit',()=>{
   const p=$('#provider').value,def=PROVIDERS[p].defaults,cfg={model:$('#model').value.trim()};
   if('baseUrl' in def)cfg.baseUrl=$('#baseUrl').value.trim();if('apiKey' in def)cfg.apiKey=$('#apiKey').value.trim();
   settings.provider=p;settings.cfg[p]=cfg;settings.system=$('#system').value;settings.temp=$('#temp').value;
-  settings.conc=Math.min(4,Math.max(1,parseInt($('#conc').value)||2));
+  settings.conc=Math.min(4,Math.max(1,parseInt($('#conc').value)||1));settings.concV=1;
   store.set('deckai.settings',settings);renderChip();
 });
 $('#fetchModels').addEventListener('click',async()=>{
