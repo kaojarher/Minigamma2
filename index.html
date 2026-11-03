@@ -64,9 +64,12 @@ section.screen{position:absolute;inset:0;overflow:auto}
 .seg button.on{background:var(--u-panel);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .pcard textarea{width:100%;border:0;outline:0;resize:vertical;background:none;font-size:17px;min-height:84px;line-height:1.6}
 .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 12px}
-.opts label,.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--u-muted)}
+.opts label,.opts2 label,.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--u-muted)}
 select,input[type=text],input[type=password],input[type=number],textarea.f{width:100%;font-size:14px;color:var(--u-text);background:var(--u-bg);border:1px solid var(--u-border);border-radius:10px;padding:8px 10px;outline:0}
 select:focus,input:focus,textarea.f:focus{border-color:var(--u-acc)}
+.opts2{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin:0 0 10px}
+.adv{margin:0 0 12px;font-size:13px;color:var(--u-muted)}.adv summary{cursor:pointer;width:max-content}.adv textarea{margin-top:8px}
+.accrow .sw{width:30px;height:26px}.accrow input[type=color]{width:34px;height:28px;padding:1px;border:1px solid var(--u-border);border-radius:8px;background:none}
 .swrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .sw{width:46px;height:34px;border-radius:9px;border:2px solid var(--u-border);padding:0;position:relative;overflow:hidden}
 .sw.on{border-color:var(--u-acc);box-shadow:0 0 0 2px var(--u-soft)}
@@ -302,9 +305,10 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
   </div>
   <button class="btn" id="chip" title="切換 LLM">🧠 <b id="chipP"></b> <small id="chipM"></small></button>
   <button class="btn" id="btnDark" title="深色模式">🌓</button>
-  <div class="pop" id="themePop" hidden><h4>簡報主題</h4><div class="themegrid" id="themeGrid"></div></div>
+  <div class="pop" id="themePop" hidden><h4>簡報主題</h4><div class="themegrid" id="themeGrid"></div><h4 style="margin-top:12px">強調色</h4><div class="swrow accrow" id="accRow" style="margin:0"></div></div>
   <div class="pop" id="exportPop" hidden style="min-width:240px"><h4>匯出</h4>
     <button class="item" data-exp="pptx">📊 PowerPoint (.pptx)</button>
+    <button class="item" data-exp="html">🌐 獨立播放網頁 (.html)</button>
     <button class="item" data-exp="pdf">📄 PDF(列印 → 另存 PDF)</button>
     <button class="item" data-exp="json">💾 專案檔 (.json)</button>
   </div>
@@ -320,11 +324,16 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
         <div class="opts">
           <label>頁數<select id="oPages"><option>5</option><option>8</option><option selected>10</option><option>12</option><option>15</option><option>20</option></select></label>
           <label>語言<select id="oLang"><option value="zh-TW">繁體中文</option><option value="zh-CN">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="auto">同輸入語言</option></select></label>
-          <label>語氣<select id="oTone"><option value="professional">專業簡潔</option><option value="friendly">親切好懂</option><option value="academic">學術嚴謹</option><option value="lively">活潑有趣</option><option value="persuasive">說服力強</option></select></label>
+          <label>語氣<select id="oTone"><option value="professional">專業簡潔</option><option value="friendly">親切好懂</option><option value="academic">學術嚴謹</option><option value="lively">活潑有趣</option><option value="persuasive">說服力強</option><option value="executive">高階主管簡報</option><option value="teaching">教學引導</option><option value="story">故事敘事</option></select></label>
           <label>圖片<select id="oImgs"><option value="commons">維基共享資源(免費圖庫)</option><option value="none">不使用圖片</option></select></label>
         </div>
+        <div class="opts2">
+          <label>目標受眾<select id="oAud"><option>一般大眾</option><option>企業主管</option><option>一般員工</option><option>學生</option><option>客戶與合作夥伴</option><option>技術人員</option></select></label>
+          <label>簡報目的(選填)<input type="text" id="oGoal" placeholder="例如:讓主管理解浪費辨識方法,並能帶領現場改善"></label>
+        </div>
+        <details class="adv"><summary>進階:補充要求</summary><textarea class="f" id="oExtra" rows="2" placeholder="指定章節、案例、數據或其他要求…"></textarea></details>
         <div class="swrow" id="homeThemes"></div>
-        <div class="rowend"><span class="hint" id="homeHint"></span><button class="cta" id="btnOutline">生成大綱 →</button></div>
+        <div class="rowend"><span class="hint" id="homeHint"></span><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btnOutline" title="先產生大綱,編輯後再生成內容">先看大綱 →</button><button class="cta" id="btnQuick" title="只需 1~3 次模型呼叫">⚡ 快速生成</button></div></div>
       </div>
       <div class="chips" id="sugg"></div>
       <div class="sec-h"><h3>我的簡報</h3><div class="sp"></div>
@@ -367,9 +376,10 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
     <div id="providerNote" class="note"></div>
     <label class="fld" id="fBase">API 位址 (Base URL)<input type="text" id="baseUrl" autocomplete="off"></label>
     <label class="fld" id="fKey">API Key<input type="password" id="apiKey" autocomplete="off" placeholder="sk-..."></label>
-    <div class="row"><label class="fld">模型<input type="text" id="model" list="modelList" autocomplete="off"></label><button type="button" class="btn" id="fetchModels">取得清單</button></div>
+    <div class="row"><label class="fld">模型<input type="text" id="model" list="modelList" autocomplete="off"></label><button type="button" class="btn" id="fetchModels">取得清單</button><button type="button" class="btn" id="testLLM">測試連線</button></div>
     <datalist id="modelList"></datalist><div id="testMsg" style="font-size:13px"></div>
     <div class="row"><label class="fld">同時生成頁數(1–4,預設 1 最穩定)<input type="number" id="conc" min="1" max="4"></label><label class="fld">Temperature(留空=預設)<input type="number" id="temp" min="0" max="2" step="0.1"></label></div>
+    <label class="fld" style="flex-direction:row;align-items:flex-start;gap:8px;color:var(--u-text)"><input type="checkbox" id="perSlide" style="width:auto;margin-top:3px"><span>逐頁生成(每頁各呼叫一次模型,較慢但最穩定)。預設關閉:分批生成,每批約 8 頁只呼叫一次。</span></label>
     <label class="fld">額外指示(附加到每次生成,可留空)<textarea class="f" id="system" rows="2" placeholder="例如:品牌名稱為「星河科技」,避免使用過度行銷的詞彙。"></textarea></label>
     <div class="note">每一頁會各呼叫一次模型(大綱另計),建議使用能穩定輸出 JSON 的模型。設定與簡報只存在這個瀏覽器的 localStorage。</div>
   </div>
@@ -436,9 +446,20 @@ const THEMES={
   paper:   {name:'紙本',bg:'#fbf7f0',fg:'#2b2520',muted:'#7a6e60',accent:'#c2562f',accent2:'#d99a2b',card:'#f1e9dc',cA:'#c2562f',cB:'#7d3419',onAccent:'#ffffff',head:"'Playfair Display','Noto Serif TC','Songti TC',serif",body:"'Noto Sans TC','Inter',sans-serif",hpf:'Georgia',pf:'Microsoft JhengHei'},
   forest:  {name:'森林',bg:'#f4f7f2',fg:'#1d2b22',muted:'#5e7064',accent:'#2f7d52',accent2:'#d9a441',card:'#e5eee6',cA:'#1f5f3f',cB:'#0f3a27',onAccent:'#ffffff',head:"'Noto Serif TC','Playfair Display',serif",body:"'Noto Sans TC','Inter',sans-serif",hpf:'Georgia',pf:'Microsoft JhengHei'},
   sunset:  {name:'日落',bg:'#fffaf5',fg:'#2a1b2e',muted:'#7d6a82',accent:'#e4572e',accent2:'#8338ec',card:'#fdeee6',cA:'#8338ec',cB:'#ff6b6b',onAccent:'#ffffff',head:"'Space Grotesk','Noto Sans TC',sans-serif",body:SANS,hpf:'Microsoft JhengHei',pf:'Microsoft JhengHei'},
+  blueprint:{name:'工程藍圖',bg:'#102b46',fg:'#f3f8ff',muted:'#b5cce2',accent:'#5ec8ff',accent2:'#ffd166',card:'#173a5c',cA:'#0b2036',cB:'#1d5a8a',onAccent:'#05263d',head:"'Space Grotesk','Noto Sans TC',sans-serif",body:SANS,hpf:'Microsoft JhengHei',pf:'Microsoft JhengHei'},
   mono:    {name:'極簡黑白',bg:'#ffffff',fg:'#0a0a0a',muted:'#666666',accent:'#0a0a0a',accent2:'#ff3d00',card:'#f2f2f2',cA:'#0a0a0a',cB:'#2e2e2e',onAccent:'#ffffff',head:"'Space Grotesk','Noto Sans TC',sans-serif",body:SANS,hpf:'Microsoft JhengHei',pf:'Microsoft JhengHei'},
   aurora:  {name:'極光',bg:'#0b1020',fg:'#e9f1ff',muted:'#8fa3c7',accent:'#34d399',accent2:'#f472b6',card:'#141c33',cA:'#0b1020',cB:'#0f766e',onAccent:'#04201a',head:"'Space Grotesk','Noto Sans TC',sans-serif",body:SANS,hpf:'Microsoft JhengHei',pf:'Microsoft JhengHei'}
 };
+const hex2rgb=h=>{h=String(h).replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return[(n>>16)&255,(n>>8)&255,n&255]};
+const rgb2hex=a=>'#'+a.map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+const mixHex=(a,b,t)=>{const x=hex2rgb(a),y=hex2rgb(b);return rgb2hex(x.map((v,i)=>v+(y[i]-v)*t))};
+const lumOf=h=>{const[r,g,b]=hex2rgb(h).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*r+.7152*g+.0722*b};
+function themeOf(d){
+  const base=THEMES[d?.themeId]||THEMES.clean;if(!d?.accent||!/^#[0-9a-f]{6}$/i.test(d.accent))return base;
+  const a=d.accent;let acc=a;
+  if(lumOf(base.bg)<.2&&lumOf(a)<.12)acc=mixHex(a,'#ffffff',.5);       // keep accent readable on dark themes
+  return{...base,accent:acc,cA:a,cB:mixHex(a,'#000000',.4),onAccent:lumOf(acc)>.45?'#0a0a0a':'#ffffff'};
+}
 const themeStyle=T=>`--bg:${T.bg};--fg:${T.fg};--muted:${T.muted};--accent:${T.accent};--accent2:${T.accent2};--card:${T.card};--onacc:${T.onAccent};--cA:${T.cA};--cB:${T.cB};--head:${T.head};--body:${T.body}`;
 const PAL=['#4f46e5','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
 const palette=(T,n)=>{const base=[T.accent,T.accent2,...PAL];return Array.from({length:Math.max(n,1)},(_,i)=>base[i%base.length])};
@@ -465,16 +486,15 @@ const PROVIDERS={
   custom:{name:'本地/自訂',defaults:{baseUrl:'http://localhost:1234/v1',apiKey:'',model:''},models:[],
     note:'任何 OpenAI 相容 API:LM Studio(<code>:1234/v1</code>)、llama.cpp server、vLLM、LocalAI 等。需允許 CORS。'}
 };
+const puterText=r=>{const c=r?.message?.content;return typeof r==='string'?r:typeof c==='string'?c:Array.isArray(c)?c.map(x=>x?.text||'').join(''):(r?.text||'')};
 async function* streamPuter(cfg,messages,signal){
   if(typeof puter==='undefined') throw new Error('無法載入 puter.js(請確認網路連線,或改用其他供應商)。');
+  let got=false;
   const resp=await puter.ai.chat(messages,{model:cfg.model,stream:true});
   if(resp&&typeof resp[Symbol.asyncIterator]==='function'){
-    for await(const part of resp){if(signal.aborted)return;const t=part?.text??part?.message?.content?.[0]?.text??'';if(t)yield t}
-  }else{
-    const c=resp?.message?.content;
-    const t=typeof c==='string'?c:Array.isArray(c)?c.map(x=>x?.text||'').join(''):(resp?.text||(typeof resp==='string'?resp:''));
-    if(t)yield t;
-  }
+    for await(const part of resp){if(signal.aborted)return;const t=part?.text??part?.message?.content?.[0]?.text??'';if(t){got=true;yield t}}
+  }else{const t=puterText(resp);if(t){got=true;yield t}}
+  if(!got&&!signal.aborted){const t=puterText(await puter.ai.chat(messages,{model:cfg.model}));if(t)yield t}   // fallback: non-stream call
 }
 async function* lines(res){const r=res.body.getReader(),d=new TextDecoder();let b='';while(true){const{done,value}=await r.read();if(done)break;b+=d.decode(value,{stream:true});const p=b.split('\n');b=p.pop();for(const x of p)yield x}if(b)yield b}
 async function httpError(res){let b='';try{b=await res.text()}catch{}try{const j=JSON.parse(b);b=j.error?.message||j.error||b}catch{}return new Error(`HTTP ${res.status}:${String(b).slice(0,400)}`)}
@@ -498,9 +518,9 @@ async function* streamOllama(cfg,messages,signal){
 const STREAMERS={puter:streamPuter,openai:streamOpenAI,ollama:streamOllama,custom:streamOpenAI};
 
 /* ================= State ================= */
-let settings={provider:'puter',cfg:{},system:'',temp:'',conc:1,...store.get('deckai.settings',{})};
+let settings={provider:'puter',cfg:{},system:'',temp:'',conc:1,perSlide:false,...store.get('deckai.settings',{})};
 if(settings.concV!==1){settings.conc=1;settings.concV=1;store.set('deckai.settings',settings)}
-let prefs={mode:'topic',pages:'10',lang:'zh-TW',tone:'professional',imgs:'commons',theme:'clean',...store.get('deckai.prefs',{})};
+let prefs={audience:'一般大眾',mode:'topic',pages:'10',lang:'zh-TW',tone:'professional',imgs:'commons',theme:'clean',...store.get('deckai.prefs',{})};
 let decks=store.get('deckai.decks',[]);
 let deck=null, genCtl=null, outCtl=null, screen='home';
 const cfgOf=p=>({...PROVIDERS[p].defaults,...(settings.cfg[p]||{})});
@@ -763,7 +783,7 @@ ${im?.url?creditHTML(im,'covr'):''}${c.edit?`<button class="ctl imgbtn" data-act
   }
 };
 function slideInner(s,i,c){
-  const T=THEMES[deck.themeId]||THEMES.clean; c={edit:false,thumb:false,...c,idx:i,deck};
+  const T=themeOf(deck); c={edit:false,thumb:false,...c,idx:i,deck};
   c.secNo=deck.slides.slice(0,i+1).filter(x=>x.layout==='section').length;
   if(s.status==='loading')return `<div class="slide" style="${themeStyle(T)}"><div class="inner"><h2>${esc(s.title||'')}</h2><div class="skelline" style="width:70%"></div><div class="skelline" style="width:55%"></div><div class="skelline" style="width:62%"></div><div class="skelline" style="width:40%"></div></div></div>`;
   if(s.status==='error')return `<div class="slide" style="${themeStyle(T)}"><div class="inner"><h2>${esc(s.title||'')}</h2><div class="errmsg">${esc(s.error||'生成失敗')}</div>${c.edit?`<button class="errbtn" data-tool="retry">↻ 重試此頁</button>`:''}</div></div>`;
@@ -791,7 +811,7 @@ function mountCharts(root){
   if(typeof Chart==='undefined')return;
   $$('canvas[data-chart]',root).forEach(cv=>{
     const s=slideById(cv.dataset.chart); if(!s?.chart)return;
-    const T=THEMES[deck.themeId]||THEMES.clean,sl=cv.closest('.slide');
+    const T=themeOf(deck),sl=cv.closest('.slide');
     const fs=()=>Math.max(8,(sl.clientWidth||1280)/1280*18);
     Chart.getChart(cv)?.destroy();
     const ch=new Chart(cv,chartConfig(s,T,fs()));
@@ -823,12 +843,12 @@ function renderHome(){
   $$('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===prefs.mode));
   $('#pPrompt').placeholder=prefs.mode==='topic'?'例如:給新進員工的資訊安全入門,包含常見攻擊手法與日常防護':'把文章、會議記錄或筆記貼在這裡,AI 會整理成簡報(內容會忠於你提供的資料)';
   $('#pPrompt').style.minHeight=prefs.mode==='paste'?'180px':'84px';
-  for(const [id,k] of [['oPages','pages'],['oLang','lang'],['oTone','tone'],['oImgs','imgs']])$('#'+id).value=prefs[k];
+  for(const [id,k] of [['oPages','pages'],['oLang','lang'],['oTone','tone'],['oImgs','imgs'],['oAud','audience']])$('#'+id).value=prefs[k];
   swatches($('#homeThemes'),prefs.theme,k=>{prefs.theme=k;store.set('deckai.prefs',prefs)});
   $('#sugg').innerHTML=prefs.mode==='topic'?SUGG.map(s=>`<button data-s="${esc(s)}">${esc(s)}</button>`).join(''):'';
   const sorted=[...decks].sort((a,b)=>b.updated-a.updated);
   $('#deckGrid').innerHTML=sorted.map(d=>{
-    const T=THEMES[d.themeId]||THEMES.clean,s0=d.slides[0];
+    const T=themeOf(d),s0=d.slides[0];
     const prev=s0&&s0.status!=='loading'&&s0.status!=='error'?(()=>{const old=deck;deck=d;const h=slideInner(s0,0,{thumb:true});deck=old;return h})():`<div style="height:100%;background:linear-gradient(135deg,${T.cA},${T.cB})"></div>`;
     return `<div class="dk" data-id="${d.id}"><div class="pv">${prev}</div><div class="meta"><b>${esc(d.title||'未命名簡報')}</b><span>${d.slides.length} 頁 · ${new Date(d.updated).toLocaleDateString('zh-TW')}</span></div><button class="xdel" data-del="${d.id}" title="刪除">✕</button></div>`;
   }).join('')||'<div class="hint">還沒有簡報,從上方開始吧!</div>';
@@ -843,7 +863,9 @@ function blankDeck(){
 
 /* ================= Outline ================= */
 const LANGN={'zh-TW':'繁體中文(台灣用語)','zh-CN':'简体中文',en:'English','ja':'日本語',auto:'與使用者輸入相同的語言'};
-const TONEN={professional:'專業、簡潔、有條理',friendly:'親切、好懂、口語化',academic:'學術、嚴謹、客觀',lively:'活潑、有趣、有感染力',persuasive:'有說服力、強調價值與行動'};
+const TONEN={professional:'專業、簡潔、有條理',friendly:'親切、好懂、口語化',academic:'學術、嚴謹、客觀',lively:'活潑、有趣、有感染力',persuasive:'有說服力、強調價值與行動',executive:'高階主管簡報:結論先行、精煉、聚焦決策與數字',teaching:'教學引導:循序漸進、有定義與例子',story:'故事敘事:有情境、轉折與畫面感'};
+const ctxText=d=>`受眾:${d.audience||'一般大眾'}\n簡報目的:${d.goal||'協助受眾快速理解主題並採取行動'}\n補充要求:${d.extra||'無'}`;
+const sourceText=d=>d.mode==='paste'?`原始資料(內容必須忠於此資料,不要憑空新增事實):\n"""\n${(d.source||'').slice(0,12000)}\n"""`:`簡報主題/需求:${d.prompt}`;
 const LAYOUT_DOC='title(封面,必須是第 1 頁)、section(章節分隔頁)、bullets(重點條列)、split(圖文並排,適合描述具體事物)、cards(3~4 個並列重點)、stats(關鍵數字)、quote(引言)、timeline(流程或時間軸)、compare(兩者對照)、chart(圖表,僅在適合數據時)、closing(結尾,必須是最後一頁)';
 function outlineMessages(d){
   const sys=`你是專業的簡報設計師與內容策略師。請為使用者規劃簡報大綱。
@@ -855,40 +877,73 @@ function outlineMessages(d){
 2. 版面要有變化,避免連續三頁使用同一種版面;section 最多 2 頁;chart、stats 只在內容真的適合時使用。
 3. 標題要具體、能單獨傳達一個重點,不要只寫「介紹」「總結」。
 4. 輸出語言:${LANGN[d.lang]}。語氣:${TONEN[d.tone]}。${d.imgs==='none'?'不使用圖片,請不要選 split 版面。':''}${settings.system.trim()?'\n額外指示:'+settings.system.trim():''}`;
-  const usr=d.mode==='paste'?`請把以下原始資料整理成簡報大綱,內容必須忠於資料,不要憑空新增事實:\n"""\n${d.source.slice(0,12000)}\n"""`:`簡報主題/需求:${d.prompt}`;
+  const usr=`${sourceText(d)}\n${ctxText(d)}`;
   return[{role:'system',content:sys},{role:'user',content:usr}];
 }
-async function makeOutline(){
+function readForm(){
   const text=$('#pPrompt').value.trim();
-  if(!text){toast('請先輸入主題或貼上文字','err');return}
-  Object.assign(prefs,{pages:$('#oPages').value,lang:$('#oLang').value,tone:$('#oTone').value,imgs:$('#oImgs').value});store.set('deckai.prefs',prefs);
-  if(!deck||deck.slides.length||deck.outline.length||!decks.includes(deck)&&false)deck=blankDeck();
+  if(!text){toast('請先輸入主題或貼上文字','err');return null}
+  Object.assign(prefs,{pages:$('#oPages').value,lang:$('#oLang').value,tone:$('#oTone').value,imgs:$('#oImgs').value,audience:$('#oAud').value});store.set('deckai.prefs',prefs);
   deck=blankDeck();
-  Object.assign(deck,{mode:prefs.mode,prompt:prefs.mode==='topic'?text:clip(text,60),source:prefs.mode==='paste'?text:''});
-  await runOutline();
+  Object.assign(deck,{mode:prefs.mode,prompt:prefs.mode==='topic'?text:clip(text,60),source:prefs.mode==='paste'?text:'',audience:prefs.audience,goal:$('#oGoal').value.trim(),extra:$('#oExtra').value.trim()});
+  return deck;
+}
+async function fetchOutline(ctl){
+  let o=null,text='';
+  for(let k=0;k<2&&!o;k++){
+    text=await callLLM(outlineMessages(deck),ctl.signal);
+    o=extractJSON(text);if(!(o&&Array.isArray(o.slides)&&o.slides.length))o=null;
+  }
+  if(!o)throw new Error('模型沒有回傳可解析的大綱 JSON。\n\n建議換用能力較強的模型(設定在右上角 🧠)。\n\n模型原始輸出(節錄):\n'+clip(text,400));
+  let sl=o.slides.slice(0,25).map(x=>({title:str(x.title,80),layout:LAYOUTS[x.layout]?x.layout:'bullets',brief:str(x.brief||x.summary,160)})).filter(x=>x.title);
+  if(!sl.length)throw new Error('大綱是空的,請重試。');
+  if(deck.imgs==='none')sl.forEach(x=>{if(x.layout==='split')x.layout='bullets'});
+  if(sl[0].layout!=='title')sl.unshift({title:str(o.title,80)||deck.prompt,layout:'title',brief:''});
+  if(sl[sl.length-1].layout!=='closing'&&sl.length>2)sl.push({title:'謝謝聆聽',layout:'closing',brief:'結語與行動呼籲'});
+  deck.title=str(o.title,80)||sl[0].title;deck.outline=sl;
+}
+let retryFn=null;
+function busyUI(txt){show('outline');$('#olBusy').hidden=false;$('#olBox').hidden=true;$('#olErr').hidden=true;$('#olBusyTxt').textContent=txt}
+function errUI(e){
+  $('#olBusy').hidden=true;const m=errMsg(e);
+  $('#olErr').hidden=false;$('#olErr').innerHTML=`<div class="errbox">${esc(m)}${/Failed to fetch|NetworkError/i.test(m)?'\n\n可能原因:服務未啟動、位址錯誤,或伺服器未允許 CORS。':''}</div><div class="rowend"><button class="btn" id="olErrBack">← 返回</button><button class="btn pri" id="olErrRetry">↻ 重試</button></div>`;
 }
 async function runOutline(){
-  outCtl?.abort();outCtl=new AbortController();const ctl=outCtl;
-  show('outline');$('#olBusy').hidden=false;$('#olBox').hidden=true;$('#olErr').hidden=true;
+  retryFn=runOutline;outCtl?.abort();outCtl=new AbortController();const ctl=outCtl;
+  busyUI('AI 正在規劃大綱…');
+  try{await fetchOutline(ctl);$('#olBusy').hidden=true;$('#olBox').hidden=false;renderOutline()}
+  catch(e){if(ctl.signal.aborted)return;errUI(e)}
+}
+async function makeOutline(){if(readForm())await runOutline()}
+/* Quick mode: ≤10 pages → ONE model call for the whole deck; more pages → outline + batches of 8 */
+async function quickRun(){
+  retryFn=quickRun;outCtl?.abort();outCtl=new AbortController();const ctl=outCtl;
+  busyUI(deck.pages>10?'AI 正在規劃大綱…':'AI 正在一次生成整份簡報…');
   try{
+    if(deck.pages>10){await fetchOutline(ctl);$('#olBusyTxt').textContent='大綱完成,正在分批生成內容…';startGenerate();return}
     let o=null,text='';
     for(let k=0;k<2&&!o;k++){
-      text=await callLLM(outlineMessages(deck),ctl.signal);
-      o=extractJSON(text);if(!(o&&Array.isArray(o.slides)&&o.slides.length))o=null;
+      text=await callLLM(oneShotMessages(deck),ctl.signal);
+      const j=extractJSON(text),arr=Array.isArray(j)?j:(j?.slides||j?.pages);
+      if(Array.isArray(arr)&&arr.length>=2)o={title:j?.title,arr};
     }
-    if(!o)throw new Error('模型沒有回傳可解析的大綱 JSON。\n\n建議換用能力較強的模型(設定在右上角 🧠)。\n\n模型原始輸出(節錄):\n'+clip(text,400));
-    let sl=o.slides.slice(0,25).map(x=>({title:str(x.title,80),layout:LAYOUTS[x.layout]?x.layout:'bullets',brief:str(x.brief||x.summary,160)})).filter(x=>x.title);
-    if(deck.imgs==='none')sl.forEach(x=>{if(x.layout==='split')x.layout='bullets'});
-    if(sl[0].layout!=='title')sl.unshift({title:str(o.title,80)||deck.prompt,layout:'title',brief:''});
-    if(sl[sl.length-1].layout!=='closing'&&sl.length>2)sl.push({title:'謝謝聆聽',layout:'closing',brief:'結語與行動呼籲'});
-    deck.title=str(o.title,80)||sl[0].title;deck.outline=sl;
-    $('#olBusy').hidden=true;$('#olBox').hidden=false;renderOutline();
-  }catch(e){
-    if(ctl.signal.aborted){return}
-    $('#olBusy').hidden=true;
-    $('#olErr').hidden=false;$('#olErr').innerHTML=`<div class="errbox">${esc(e.message||e)}${/Failed to fetch|NetworkError/i.test(e.message||'')?'\n\n可能原因:服務未啟動、位址錯誤,或伺服器未允許 CORS。':''}</div><div class="rowend"><button class="btn" id="olErrBack">← 返回</button><button class="btn pri" id="olErrRetry">↻ 重試</button></div>`;
-  }
+    if(!o)throw new Error('模型沒有回傳可解析的簡報 JSON。\n\n可改按「先看大綱」,或在設定開啟「逐頁生成」,也可換用能力較強的模型。\n\n模型原始輸出(節錄):\n'+clip(text,400));
+    const imgsOn=deck.imgs!=='none';
+    deck.slides=o.arr.slice(0,25).map((raw,i)=>{
+      const cand=normalizeSlide(raw,'bullets',imgsOn,'');
+      const asked=LAYOUTS[raw?.layout]?raw.layout:'bullets';
+      if(cand._empty||(cand.layout!==asked&&!(asked==='split'&&!imgsOn)))return{id:uid(),layout:asked,title:str(raw?.title??raw?.heading,90)||`第 ${i+1} 頁`,brief:'',status:'loading'};
+      delete cand._empty;return{id:uid(),...cand,brief:'',status:'ready'};
+    });
+    deck.title=str(o.title,80)||deck.slides[0]?.title||deck.prompt;
+    deck.outline=deck.slides.map(s=>({title:s.title,layout:s.layout,brief:''}));
+    decks.unshift(deck);deck.updated=Date.now();saveDecks();
+    show('editor');renderEditor();
+    attachImages(deck.slides.filter(s=>s.status==='ready'&&s.image?.query&&!s.image.url)).catch(()=>{});
+    if(deck.slides.some(s=>s.status==='loading'))runGeneration();
+  }catch(e){if(ctl.signal.aborted)return;errUI(e)}
 }
+async function quickGenerate(){if(readForm())await quickRun()}
 let olSort=null;
 function renderOutline(){
   $('#olTitle').value=deck.title;
@@ -923,7 +978,7 @@ ${SLIDE_SCHEMA}
 const cleanForLLM=s=>{const o={...s};delete o.id;delete o.status;delete o.error;delete o.brief;if(o.image)o.image_query=o.image.query;delete o.image;delete o.flip;return o};
 function slideUser(s,i,instr){
   const outline=deck.slides.map((x,k)=>`${k+1}. [${x.layout}] ${x.title}`).join('\n');
-  let u=`簡報主題:${deck.title}\n整份大綱(避免與其他頁重複):\n${outline}\n\n現在請撰寫第 ${i+1} 頁:\n版面:${s.layout}\n標題:${s.title}\n重點說明:${s.brief||'(無)'}`;
+  let u=`簡報主題:${deck.title}\n${ctxText(deck)}\n整份大綱(避免與其他頁重複):\n${outline}\n\n現在請撰寫第 ${i+1} 頁:\n版面:${s.layout}\n標題:${s.title}\n重點說明:${s.brief||'(無)'}`;
   if(instr)u+=`\n\n此頁目前內容:\n${JSON.stringify(cleanForLLM(s))}\n\n使用者的修改指示:${instr}\n(可依指示更換版面;輸出完整的新頁 JSON)`;
   else u+=`\n(請使用 ${s.layout} 版面)`;
   if(deck.mode==='paste'&&deck.source)u+=`\n\n原始資料(內容必須忠於此資料):\n"""\n${deck.source.slice(0,12000)}\n"""`;
@@ -974,10 +1029,77 @@ function genUI(){
   $('#genTxt').textContent=active?`AI 正在生成 ${done}/${total}${bad?`(${bad} 頁失敗)`:''}`:`有 ${bad} 頁生成失敗,可逐頁「重試」或一次重試全部`;
   $('#genFill').style.width=(done/total*100)+'%';
 }
+const rulesText=d=>`規則:
+1. 文字要精簡有力,像簡報而不是文章;不要使用 Markdown 符號(如 ** 或 #)。
+2. image_query 一律用英文,寫具體、可被拍攝的實物或場景(例如 "solar panels field"、"team meeting office"),避免抽象詞、人名與品牌。${d.imgs==='none'?'本簡報不使用圖片,請省略 image_query。':''}
+3. 數字與事實只寫你有把握的內容;不確定時改用定性描述,圖表需在 source 註明「示意數據」。
+4. notes 是 1~3 句講者備註(口語、可直接照講)。
+5. 每頁所有欄位都必須有實際內容(不可是空字串或空陣列)。
+6. 輸出語言:${LANGN[d.lang]}。語氣:${TONEN[d.tone]}。${settings.system.trim()?'\n額外指示:'+settings.system.trim():''}`;
+function deckSystem(d,batch){
+  return `你是專業的簡報設計師與撰稿人。${batch?'請依指定頁碼撰寫多頁簡報內容':'請一次產出整份簡報'}。只輸出一個 JSON 物件(可放在 \`\`\`json 區塊內),不要輸出其他文字:
+${batch?'{"slides":[{第一頁},{第二頁},…]}':'{"title":"簡報標題","slides":[{每頁一個物件},…]}'}
+${SLIDE_SCHEMA}
+可用的 icon 名稱:${ICONS.join(', ')}。
+${batch?'':`版面選擇:可用版面 ${LAYOUT_DOC}。共 ${d.pages} 頁;第 1 頁為 title,最後一頁為 closing;版面要有變化,避免連續三頁相同;chart、stats 僅在內容真的適合時使用。\n`}${rulesText(d)}`;
+}
+function oneShotMessages(d){return[{role:'system',content:deckSystem(d,false)},{role:'user',content:`${sourceText(d)}\n${ctxText(d)}\n共 ${d.pages} 頁。`}]}
+function batchMessages(d,idxs){
+  const outline=d.slides.map((x,k)=>`${k+1}. [${x.layout}] ${x.title}${x.brief?` — ${x.brief}`:''}`).join('\n');
+  return[{role:'system',content:deckSystem(d,true)},{role:'user',content:`簡報主題:${d.title}\n${ctxText(d)}\n整份大綱:\n${outline}\n\n請撰寫以下頁面的完整內容:第 ${idxs.map(i=>i+1).join('、')} 頁(共 ${idxs.length} 頁),依這個順序放進 slides 陣列。每頁的 layout 與 title 請沿用大綱(措辭可微調),內容彼此銜接、不重複。`+(d.mode==='paste'?`\n\n${sourceText(d)}`:'')}];
+}
+async function attachImages(list,signal){
+  const q=[...list];
+  const w=async()=>{while(q.length){const s=q.shift();try{await attachImage(s,signal)}catch(e){if(signal?.aborted)return}if(screen==='editor'&&deck?.slides.includes(s)){refreshCard(s.id);touch()}}};
+  await Promise.all([w(),w(),w()]);
+}
+const BATCH=8;
+async function genBatch(idxs,signal){
+  const slides=idxs.map(i=>deck.slides[i]);let arr=null;
+  for(let a=0;a<2&&!arr;a++){
+    const w=backoffUntil-Date.now();if(w>0)await wait(w,signal);
+    try{
+      const o=extractJSON(await callLLM(batchMessages(deck,idxs),signal));
+      const x=Array.isArray(o)?o:(o?.slides||o?.pages);arr=Array.isArray(x)&&x.length?x:null;
+    }catch(e){
+      if(signal?.aborted||e?.name==='AbortError'||e.fatal)throw e;
+      rateLimited=true;backoffUntil=Math.max(backoffUntil,Date.now()+RB()*2*(a+1));if(a===1)throw e;
+    }
+  }
+  if(!arr)return 0;
+  const imgsOn=deck.imgs!=='none',filled=[];
+  slides.forEach((s,k)=>{
+    const raw=arr[k];if(!raw)return;
+    const cand=normalizeSlide(raw,s.layout,imgsOn,s.title),asked=LAYOUTS[raw.layout]?raw.layout:s.layout;
+    if(cand._empty||(cand.layout!==asked&&!(asked==='split'&&!imgsOn)))return;   // incomplete → leave for the per-slide fallback
+    delete cand._empty;const keep={id:s.id,brief:s.brief,flip:s.flip};
+    for(const key of Object.keys(s))delete s[key];Object.assign(s,keep,cand,{status:'ready'});filled.push(s);
+  });
+  for(const s of filled)if(screen==='editor'&&deck.slides.includes(s))refreshCard(s.id);
+  await attachImages(filled.filter(s=>s.image?.query&&!s.image.url),signal);
+  return filled.length;
+}
 async function runGeneration(){
-  genCtl?.abort();genCtl=new AbortController();const ctl=genCtl;
-  const queue=deck.slides.filter(s=>s.status==='loading');let fatalMsg='';
+  genCtl?.abort();genCtl=new AbortController();const ctl=genCtl;let fatalMsg='';
   backoffUntil=0;rateLimited=false;
+  const pending=()=>deck.slides.filter(s=>s.status==='loading');
+  genUI();
+  /* phase 1 — batches: ~8 slides per model call (skipped in per-slide mode) */
+  if(!settings.perSlide&&pending().length>=2){
+    const idx=pending().map(s=>deck.slides.indexOf(s));
+    for(let k=0;k<idx.length&&!ctl.signal.aborted;k+=BATCH){
+      const part=idx.slice(k,k+BATCH);
+      try{await genBatch(part,ctl.signal)}catch(e){
+        if(e?.fatal){fatalMsg=errMsg(e);ctl.abort();break}
+        if(ctl.signal.aborted)break;          // other errors: fall through to the per-slide fallback
+      }
+      for(const i of part)if(deck.slides[i])refreshCard(deck.slides[i].id);
+      if(deck.slides[0]?.status==='ready'&&deck.slides[0].layout==='title'&&!deck.title)deck.title=deck.slides[0].title;
+      genUI();touch();
+    }
+  }
+  /* phase 2 — per-slide (with retries) for whatever is still missing */
+  const queue=ctl.signal.aborted?[]:pending();
   const conc=()=>rateLimited?1:Math.min(4,Math.max(1,+settings.conc||1));
   const worker=async w=>{
     while(queue.length&&!ctl.signal.aborted){
@@ -994,7 +1116,6 @@ async function runGeneration(){
       if(fatalMsg)break;
     }
   };
-  genUI();
   await Promise.all(Array.from({length:4},(_,w)=>worker(w)));
   const stopped=ctl.signal.aborted;
   if(stopped){for(const s of deck.slides)if(s.status==='loading'){s.status='error';s.error=fatalMsg?'已因額度/授權問題停止:'+fatalMsg:'已停止生成'}}
@@ -1240,7 +1361,7 @@ async function iconPng(name,color){
 async function exportPptx(){
   if(typeof PptxGenJS==='undefined')return toast('PptxGenJS 載入失敗(請檢查網路連線)','err');
   toast('正在產生 PPTX…');
-  const T=THEMES[deck.themeId]||THEMES.clean,pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';pptx.title=deck.title||'簡報';
+  const T=themeOf(deck),pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';pptx.title=deck.title||'簡報';
   const SH=pptx.ShapeType,W=13.333,H=7.5;let failedImg=0;
   const dataFor=async im=>{if(!im?.url)return null;try{return await fetchDataUrl(im.url)}catch{failedImg++;return null}};
   const txt=(sl,t,o)=>sl.addText(String(t??''),{fontFace:T.pf,color:hx(T.fg),margin:0,fit:'shrink',valign:'top',...o});
@@ -1324,6 +1445,38 @@ async function exportPptx(){
   toast(failedImg?`PPTX 已下載(${failedImg} 張圖片因無法讀取被略過)`:'PPTX 已下載 ✦');
 }
 
+/* ================= Export: standalone HTML (offline-playable, keeps themes & charts) ================= */
+function slideCss(){const css=$('style').textContent,k=css.indexOf('/* ================= Slide canvas');return k<0?'':css.slice(k)}
+function exportHtml(){
+  const T=themeOf(deck),charts=Object.fromEntries(deck.slides.filter(s=>s.chart).map(s=>[s.id,s.chart]));
+  const secs=deck.slides.map((s,i)=>`<div class="sl" data-i="${i}" hidden><div class="stg">${slideInner(s,i,{})}</div></div>`).join('\n');
+  const js=`const T=${JSON.stringify(T)},CH=${JSON.stringify(charts)},NOTES=${JSON.stringify(deck.slides.map(s=>s.notes||''))},PAL=${JSON.stringify(PAL)};
+const palette=${palette.toString()};
+${chartConfig.toString()}
+const sl=[...document.querySelectorAll('.sl')];let cur=0,showNotes=false;
+function fit(){document.documentElement.style.setProperty('--w',Math.min(innerWidth,innerHeight*16/9)+'px')}
+function mount(el){if(typeof Chart==='undefined')return;el.querySelectorAll('canvas[data-chart]').forEach(cv=>{if(Chart.getChart(cv))return;const s=el.querySelector('.slide');new Chart(cv,chartConfig({chart:CH[cv.dataset.chart]},T,Math.max(8,s.clientWidth/1280*18)))})}
+function go(i){cur=Math.max(0,Math.min(sl.length-1,i));sl.forEach((e,k)=>e.hidden=k!==cur);mount(sl[cur]);document.getElementById('bar').style.width=((cur+1)/sl.length*100)+'%';document.getElementById('info').textContent=(cur+1)+' / '+sl.length;const n=document.getElementById('notes');n.hidden=!(showNotes&&NOTES[cur]);n.textContent=NOTES[cur];history.replaceState(null,'','#'+(cur+1))}
+addEventListener('keydown',e=>{if([' ','ArrowRight','ArrowDown','PageDown','Enter'].includes(e.key)){e.preventDefault();go(cur+1)}else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(cur-1)}else if(e.key==='Home')go(0);else if(e.key==='End')go(sl.length-1);else if(e.key==='n'||e.key==='N'){showNotes=!showNotes;go(cur)}else if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.()}});
+addEventListener('click',e=>{go(e.clientX<innerWidth*.3?cur-1:cur+1)});addEventListener('resize',fit);
+let tx=null;addEventListener('touchstart',e=>tx=e.touches[0].clientX);addEventListener('touchend',e=>{if(tx==null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>40){go(d<0?cur+1:cur-1);e.preventDefault()}tx=null});
+fit();go((parseInt(location.hash.slice(1))||1)-1);`;
+  const doc=`<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(deck.title||'簡報')}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700&family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}.sl{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}.sl[hidden]{display:none}.stg{width:var(--w);container-type:inline-size}
+#bar{position:fixed;left:0;bottom:0;height:3px;background:#8b6dff;transition:width .3s}#info{position:fixed;right:12px;bottom:8px;color:#fff;opacity:.45;font:12px sans-serif}
+#notes{position:fixed;left:0;right:0;bottom:0;background:rgba(0,0,0,.82);color:#eee;padding:14px 22px;font:17px/1.6 sans-serif;max-height:30vh;overflow:auto}
+@media print{html,body{overflow:visible;height:auto;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:1280px 720px;margin:0}.sl,.sl[hidden]{position:static;display:block!important;break-after:page}.stg{width:1280px}#bar,#info,#notes{display:none}}
+${slideCss()}</style></head><body>
+${secs}
+<div id="bar"></div><div id="info"></div><div id="notes" hidden></div>
+${Object.keys(charts).length?'<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.js"><\/script>':''}
+<script>${js}<\/script></body></html>`;
+  download(new Blob([doc],{type:'text/html;charset=utf-8'}),safeName(deck.title)+'.html');
+  toast('已匯出獨立播放網頁(←/→ 翻頁、F 全螢幕、N 備註)');
+}
+
 /* ================= Export: PDF / JSON ================= */
 async function exportPdf(){
   const root=$('#printRoot');root.innerHTML=deck.slides.map((s,i)=>`<div class="pslide"><div class="cqp">${slideInner(s,i,{})}</div></div>`).join('');
@@ -1340,14 +1493,21 @@ $('#fileImport').addEventListener('change',async e=>{
 });
 
 /* ================= Header / popovers ================= */
-function renderThemePop(){
+const ACC=['#536dfe','#087e8b','#e07a5f','#252a34','#6a4c93','#d62839'];
+function renderAccRow(){
+  $('#accRow').innerHTML=`<button type="button" class="sw ${!deck.accent?'on':''}" data-acc="" title="主題預設" style="background:var(--u-soft);font-size:11px">預設</button>`+ACC.map(c=>`<button type="button" class="sw ${deck.accent===c?'on':''}" data-acc="${c}" style="background:${c}"></button>`).join('')+`<input type="color" id="accPick" value="${deck.accent||themeOf(deck).accent}" title="自訂顏色">`;
+}
+function setAccent(c){deck.accent=c||undefined;touch();renderAccRow();renderEditor()}
+$('#accRow').addEventListener('click',e=>{const b=e.target.closest('[data-acc]');if(b)setAccent(b.dataset.acc)});
+$('#accRow').addEventListener('input',e=>{if(e.target.id==='accPick'){deck.accent=e.target.value;touch();renderEditor()}});
+function renderThemePop(){renderAccRow();
   $('#themeGrid').innerHTML=Object.entries(THEMES).map(([k,T])=>`<button class="tsw ${k===deck.themeId?'on':''}" data-k="${k}"><div class="pv" style="background:${T.bg};color:${T.fg}"><b style="font-family:${T.head.replace(/"/g,'')}">Aa 標題</b><i style="background:${T.accent}"></i></div><span class="nm">${T.name}</span></button>`).join('');
 }
 $('#btnTheme').addEventListener('click',e=>{e.stopPropagation();$('#exportPop').hidden=true;renderThemePop();$('#themePop').hidden=!$('#themePop').hidden});
 $('#themeGrid').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;deck.themeId=b.dataset.k;touch();renderThemePop();renderEditor()});
 $('#btnExport').addEventListener('click',e=>{e.stopPropagation();$('#themePop').hidden=true;$('#exportPop').hidden=!$('#exportPop').hidden});
 $('#exportPop').addEventListener('click',e=>{const b=e.target.closest('[data-exp]');if(!b)return;$('#exportPop').hidden=true;
-  ({pptx:exportPptx,pdf:exportPdf,json:exportJson})[b.dataset.exp]().catch(err=>toast('匯出失敗:'+(err.message||err),'err'))});
+  ({pptx:exportPptx,pdf:exportPdf,json:exportJson,html:exportHtml})[b.dataset.exp]().catch(err=>toast('匯出失敗:'+(err.message||err),'err'))});
 document.addEventListener('click',e=>{if(!e.target.closest('.pop')&&!e.target.closest('#btnTheme,#btnExport')){$('#themePop').hidden=true;$('#exportPop').hidden=true}});
 $('#deckTitle').addEventListener('input',e=>{deck.title=e.target.value;touch()});
 $('#btnHome').addEventListener('click',()=>{if(genCtl&&!confirm('簡報仍在生成中,離開會停止生成。確定離開?'))return;genCtl?.abort();outCtl?.abort();saveDecks();show('home')});
@@ -1358,6 +1518,7 @@ document.documentElement.dataset.theme=store.get('deckai.dark',matchMedia('(pref
 $$('.seg button').forEach(b=>b.addEventListener('click',()=>{prefs.mode=b.dataset.mode;store.set('deckai.prefs',prefs);renderHome()}));
 $('#sugg').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b){$('#pPrompt').value=b.dataset.s;$('#pPrompt').focus()}});
 $('#btnOutline').addEventListener('click',makeOutline);
+$('#btnQuick').addEventListener('click',quickGenerate);
 $('#pPrompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();makeOutline()}});
 $('#deckGrid').addEventListener('click',e=>{
   const d=e.target.closest('[data-del]');
@@ -1376,7 +1537,7 @@ $('#olBack').addEventListener('click',()=>show('home'));
 $('#olStop').addEventListener('click',()=>{outCtl?.abort();show('home')});
 $('#olRegen').addEventListener('click',runOutline);
 $('#olGo').addEventListener('click',startGenerate);
-$('#olErr').addEventListener('click',e=>{if(e.target.id==='olErrBack')show('home');if(e.target.id==='olErrRetry')runOutline()});
+$('#olErr').addEventListener('click',e=>{if(e.target.id==='olErrBack')show('home');if(e.target.id==='olErrRetry')(retryFn||runOutline)()});
 
 /* settings */
 const dlg=$('#settings');
@@ -1387,7 +1548,7 @@ function fillSettings(){
   $('#baseUrl').value=cfg.baseUrl||'';$('#apiKey').value=cfg.apiKey||'';$('#model').value=cfg.model||'';
   $('#modelList').innerHTML=def.models.map(m=>`<option value="${m}">`).join('');$('#testMsg').textContent='';
 }
-function openSettings(){$('#provider').value=settings.provider;fillSettings();$('#system').value=settings.system;$('#temp').value=settings.temp;$('#conc').value=settings.conc;dlg.showModal()}
+function openSettings(){$('#provider').value=settings.provider;fillSettings();$('#perSlide').checked=!!settings.perSlide;$('#system').value=settings.system;$('#temp').value=settings.temp;$('#conc').value=settings.conc;dlg.showModal()}
 $('#chip').addEventListener('click',openSettings);
 $('#provider').addEventListener('change',fillSettings);
 $('#cancelSettings').addEventListener('click',()=>dlg.close());
@@ -1395,8 +1556,20 @@ $('#settingsForm').addEventListener('submit',()=>{
   const p=$('#provider').value,def=PROVIDERS[p].defaults,cfg={model:$('#model').value.trim()};
   if('baseUrl' in def)cfg.baseUrl=$('#baseUrl').value.trim();if('apiKey' in def)cfg.apiKey=$('#apiKey').value.trim();
   settings.provider=p;settings.cfg[p]=cfg;settings.system=$('#system').value;settings.temp=$('#temp').value;
-  settings.conc=Math.min(4,Math.max(1,parseInt($('#conc').value)||1));settings.concV=1;
+  settings.conc=Math.min(4,Math.max(1,parseInt($('#conc').value)||1));settings.concV=1;settings.perSlide=$('#perSlide').checked;
   store.set('deckai.settings',settings);renderChip();
+});
+$('#testLLM').addEventListener('click',async()=>{
+  const msg=$('#testMsg'),p=$('#provider').value,def=PROVIDERS[p].defaults,old=[settings.provider,settings.cfg[p]];
+  const cfg={model:$('#model').value.trim()};if('baseUrl' in def)cfg.baseUrl=$('#baseUrl').value.trim();if('apiKey' in def)cfg.apiKey=$('#apiKey').value.trim();
+  msg.className='';msg.textContent='測試中…';const t0=performance.now();
+  try{
+    settings.provider=p;settings.cfg[p]=cfg;
+    const r=await callLLM([{role:'user',content:'請只回覆:連線成功'}],typeof AbortSignal!=='undefined'&&AbortSignal.timeout?AbortSignal.timeout(40000):undefined);
+    if(!r.trim())throw new Error('連線成功但模型沒有回傳內容(可能是模型名稱不對,或模型把額度都用在推理上)');
+    msg.className='ok';msg.textContent=`✓ 連線成功(${((performance.now()-t0)/1000).toFixed(1)} 秒):${clip(r.trim(),40)}`;
+  }catch(e){msg.className='bad';msg.textContent='✕ '+errMsg(e)+(/Failed to fetch/i.test(errMsg(e))?'(服務未啟動或未允許 CORS)':'')}
+  finally{settings.provider=old[0];if(old[1]===undefined)delete settings.cfg[p];else settings.cfg[p]=old[1]}
 });
 $('#fetchModels').addEventListener('click',async()=>{
   const p=$('#provider').value,msg=$('#testMsg'),base=$('#baseUrl').value.trim().replace(/\/+$/,''),key=$('#apiKey').value.trim();
