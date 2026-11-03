@@ -64,6 +64,7 @@ section.screen{position:absolute;inset:0;overflow:auto}
 .seg button.on{background:var(--u-panel);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .pcard textarea{width:100%;border:0;outline:0;resize:vertical;background:none;font-size:17px;min-height:84px;line-height:1.6}
 .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 12px}
+.opts input[type=number]{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--u-line);border-radius:8px;background:var(--u-bg);color:var(--u-text);font:inherit}
 .opts label,.opts2 label,.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--u-muted)}
 select,input[type=text],input[type=password],input[type=number],textarea.f{width:100%;font-size:14px;color:var(--u-text);background:var(--u-bg);border:1px solid var(--u-border);border-radius:10px;padding:8px 10px;outline:0}
 select:focus,input:focus,textarea.f:focus{border-color:var(--u-acc)}
@@ -305,6 +306,7 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
   </div>
   <button class="btn" id="chip" title="切換 LLM">🧠 <b id="chipP"></b> <small id="chipM"></small></button>
   <button class="btn" id="btnDark" title="深色模式">🌓</button>
+  本工具由高嘉和編製2026 Nov
   <div class="pop" id="themePop" hidden><h4>簡報主題</h4><div class="themegrid" id="themeGrid"></div><h4 style="margin-top:12px">強調色</h4><div class="swrow accrow" id="accRow" style="margin:0"></div></div>
   <div class="pop" id="exportPop" hidden style="min-width:240px"><h4>匯出</h4>
     <button class="item" data-exp="pptx">📊 PowerPoint (.pptx)</button>
@@ -322,7 +324,7 @@ dialog::backdrop{background:rgba(10,8,25,.5)}
         <div class="seg"><button data-mode="topic" class="on">✦ 輸入主題</button><button data-mode="paste">📋 貼上文字</button></div>
         <textarea id="pPrompt" placeholder="例如:給新進員工的資訊安全入門,包含常見攻擊手法與日常防護"></textarea>
         <div class="opts">
-          <label>頁數<select id="oPages"><option>5</option><option>8</option><option selected>10</option><option>12</option><option>15</option><option>20</option></select></label>
+          <label>頁數<input id="oPages" type="number" min="1" step="1" value="10" inputmode="numeric" placeholder="例如 10"></label>
           <label>語言<select id="oLang"><option value="zh-TW">繁體中文</option><option value="zh-CN">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="auto">同輸入語言</option></select></label>
           <label>語氣<select id="oTone"><option value="professional">專業簡潔</option><option value="friendly">親切好懂</option><option value="academic">學術嚴謹</option><option value="lively">活潑有趣</option><option value="persuasive">說服力強</option><option value="executive">高階主管簡報</option><option value="teaching">教學引導</option><option value="story">故事敘事</option></select></label>
           <label>圖片<select id="oImgs"><option value="commons">維基共享資源(免費圖庫)</option><option value="none">不使用圖片</option></select></label>
@@ -883,7 +885,9 @@ function outlineMessages(d){
 function readForm(){
   const text=$('#pPrompt').value.trim();
   if(!text){toast('請先輸入主題或貼上文字','err');return null}
-  Object.assign(prefs,{pages:$('#oPages').value,lang:$('#oLang').value,tone:$('#oTone').value,imgs:$('#oImgs').value,audience:$('#oAud').value});store.set('deckai.prefs',prefs);
+  const np=Math.max(1,Math.floor(+$('#oPages').value));if(!np){toast('請輸入頁數','err');return null}
+  $('#oPages').value=np;
+  Object.assign(prefs,{pages:String(np),lang:$('#oLang').value,tone:$('#oTone').value,imgs:$('#oImgs').value,audience:$('#oAud').value});store.set('deckai.prefs',prefs);
   deck=blankDeck();
   Object.assign(deck,{mode:prefs.mode,prompt:prefs.mode==='topic'?text:clip(text,60),source:prefs.mode==='paste'?text:'',audience:prefs.audience,goal:$('#oGoal').value.trim(),extra:$('#oExtra').value.trim()});
   return deck;
@@ -895,7 +899,7 @@ async function fetchOutline(ctl){
     o=extractJSON(text);if(!(o&&Array.isArray(o.slides)&&o.slides.length))o=null;
   }
   if(!o)throw new Error('模型沒有回傳可解析的大綱 JSON。\n\n建議換用能力較強的模型(設定在右上角 🧠)。\n\n模型原始輸出(節錄):\n'+clip(text,400));
-  let sl=o.slides.slice(0,25).map(x=>({title:str(x.title,80),layout:LAYOUTS[x.layout]?x.layout:'bullets',brief:str(x.brief||x.summary,160)})).filter(x=>x.title);
+  let sl=o.slides.map(x=>({title:str(x.title,80),layout:LAYOUTS[x.layout]?x.layout:'bullets',brief:str(x.brief||x.summary,160)})).filter(x=>x.title);
   if(!sl.length)throw new Error('大綱是空的,請重試。');
   if(deck.imgs==='none')sl.forEach(x=>{if(x.layout==='split')x.layout='bullets'});
   if(sl[0].layout!=='title')sl.unshift({title:str(o.title,80)||deck.prompt,layout:'title',brief:''});
@@ -925,11 +929,11 @@ async function quickRun(){
     for(let k=0;k<2&&!o;k++){
       text=await callLLM(oneShotMessages(deck),ctl.signal);
       const j=extractJSON(text),arr=Array.isArray(j)?j:(j?.slides||j?.pages);
-      if(Array.isArray(arr)&&arr.length>=2)o={title:j?.title,arr};
+      if(Array.isArray(arr)&&arr.length>=1)o={title:j?.title,arr};
     }
     if(!o)throw new Error('模型沒有回傳可解析的簡報 JSON。\n\n可改按「先看大綱」,或在設定開啟「逐頁生成」,也可換用能力較強的模型。\n\n模型原始輸出(節錄):\n'+clip(text,400));
     const imgsOn=deck.imgs!=='none';
-    deck.slides=o.arr.slice(0,25).map((raw,i)=>{
+    deck.slides=o.arr.map((raw,i)=>{
       const cand=normalizeSlide(raw,'bullets',imgsOn,'');
       const asked=LAYOUTS[raw?.layout]?raw.layout:'bullets';
       if(cand._empty||(cand.layout!==asked&&!(asked==='split'&&!imgsOn)))return{id:uid(),layout:asked,title:str(raw?.title??raw?.heading,90)||`第 ${i+1} 頁`,brief:'',status:'loading'};
